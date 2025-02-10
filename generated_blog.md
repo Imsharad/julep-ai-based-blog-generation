@@ -1,0 +1,1 @@
+{{_.choices[0].message.content}}

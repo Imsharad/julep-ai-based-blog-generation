@@ -1,0 +1,26 @@
+name: Jina Reader Task
+description: Convert web content to LLM-friendly text using Jina Reader API
+tools:
+  - name: jina_reader
+    type: integration
+    integration:
+      provider: jina-reader
+      method: read
+      setup:
+        api_key: YOUR_JINA_API_KEY  # From https://jina.ai/reader/
+input_schema:
+  type: object
+  properties:
+    url:
+      type: string
+      format: uri
+  required: [url]
+
+main:
+  - tool: jina_reader
+    arguments:
+      url: "{{inputs[0].url}}"
+      # Optional parameters from Jina's API:
+      format: "text"  # or "json"
+      max_retries: 3
+      timeout: 30 
