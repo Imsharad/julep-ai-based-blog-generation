@@ -1,0 +1,28 @@
+name: Query Formation
+description: Constructs search queries following blog generator standards
+input_schema:
+  type: object
+  properties:
+    raw_query:
+      type: string
+      description: Base topic for query formation
+    search_context:
+      type: string
+      default: "comprehensive blog post"
+
+main:
+- evaluate:
+    base_query: "{{inputs.raw_query}} {{inputs.search_context}}"
+- prompt:
+  - role: system
+    content: |
+      You are a search expert. Refine this query for better results:
+      "{{_.base_query}}"
+  name: query_refinement
+  response_format:
+    type: text
+  settings:
+    model: claude-3.5-sonnet
+    temperature: 0.4
+- set:
+    output: "{{_.query_refinement.choices[0].message.content}}" 

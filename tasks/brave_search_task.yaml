@@ -1,0 +1,24 @@
+name: Brave Search
+tools:
+- name: brave_search
+  type: integration
+  integration:
+    provider: brave
+    setup:
+      api_key: "<ACTUAL_API_KEY>"  # Replaced during load
+main:
+- tool: brave_search
+  arguments:
+    # query: "inputs[0].topic latest news"  # Quadruple braces for YAML escaping
+      query: $ steps[0].input.topic
+
+- evaluate:
+    search_results: |-
+      $ {
+        "results": [
+          {
+            "snippet": r['snippet'],
+            "title": r['title']          }
+          for r in _['result']
+        ]
+      } 

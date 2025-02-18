@@ -1,0 +1,42 @@
+name: Blog Prompt Engineering
+description: Creates blog writing prompts following generator standards
+input_schema:
+  type: object
+  properties:
+    search_results:
+      type: array
+      items:
+        type: object
+        properties:
+          url: {type: string}
+          title: {type: string}
+          snippet: {type: string}
+    topic:
+      type: string
+
+main:
+- evaluate:
+    formatted_results: "$ [{'title': r.get('title'), 'content': r.get('content')} for r in _.search_results]"
+- prompt:
+  - role: system
+    content: |
+      $ f""" You are a professional blog writer. Create a comprehensive post about
+      '{steps[0].input.topic}' using these search results:
+      """
+  - role: user
+    content: |
+      $ f""" {_.formatted_results}
+      
+      Requirements:
+      - Markdown formatting
+      - Section headings
+      - Source citations
+      - 500-700 words
+      """
+  response_format:
+    type: text
+  settings:
+    model: claude-3.5-sonnet
+    temperature: 0.7
+- evaluate:
+    content: $ _.choices[0].message.content #python expression
