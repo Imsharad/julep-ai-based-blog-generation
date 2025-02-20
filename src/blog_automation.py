@@ -152,11 +152,20 @@ class BlogAutomation:
         if not search_results:
             print("Brave search failed")
             return
+        
+        # Use get to safely access nested keys
+        results = search_results.get('search_results', {}).get('results', None)
+
+        if not results:
+            print("No results found in search response")
+            return
+
+        print(f"Search results: {results}")
 
         blog_post = await self.run_task(
             "blog_prompt_engineering_task",
             {
-                "search_results": search_results.get("result", []),
+                "search_results": results,
                 "topic": search_query
             }
         )

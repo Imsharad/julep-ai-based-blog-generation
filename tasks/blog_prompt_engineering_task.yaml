@@ -16,7 +16,7 @@ input_schema:
 
 main:
 - evaluate:
-    formatted_results: "$ [{'title': r.get('title'), 'content': r.get('content')} for r in _.search_results]"
+    formatted_results: "$ [{'title': r.get('title'), 'snippet': r.get('snippet')} for r in _.search_results]"
 - prompt:
   - role: system
     content: |
