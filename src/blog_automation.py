@@ -10,6 +10,7 @@ import sys
 from pathlib import Path
 import uuid  # Add this import to generate valid UUIDs
 import logging
+import requests
 
 class BlogAutomation:
     def __init__(self):
@@ -34,6 +35,7 @@ class BlogAutomation:
         self.julep_api_key = os.getenv("JULEP_API_KEY")
         self.brave_api_key = os.getenv("BRAVE_API_KEY")
         self.agent_id = os.getenv("AGENT_UUID")  # Matches AGENT_UUID in .env
+        self.jina_api_key = os.getenv("JINA_API_KEY")
         
         # Validate all required variables exist
         missing = []
@@ -66,6 +68,32 @@ class BlogAutomation:
             
             task_defs[yaml_file.stem] = yaml.safe_load(content)
         return task_defs
+
+    async def call_jina_api(self, search_query: str):
+        """Call Jina AI API to generate blog content"""
+        url = "https://deepsearch.jina.ai/v1/chat/completions"
+        headers = {
+            "Content-Type": "application/json",
+            "Authorization": f"Bearer {self.jina_api_key}"
+        }
+        payload = {
+            "model": "jina-deepsearch-v1",
+            "messages": [
+                {"role": "user", "content": "Hi!"},
+                {"role": "assistant", "content": "Hi, how can I help you?"},
+                {"role": "user", "content": f"You are a professional blog writer. Create a comprehensive post about {search_query}"}
+            ],
+            "stream": False, 
+            "reasoning_effort": "high"
+        }
+
+        try:
+            response = requests.post(url, headers=headers, json=payload)
+            response.raise_for_status()
+            return response.json()
+        except requests.exceptions.RequestException as e:
+            logging.error(f"Failed to call Jina AI API: {str(e)}")
+            return None
 
     async def run_task(self, task_name: str, inputs: dict):
         """Execute a specific task by name"""
@@ -130,59 +158,38 @@ class BlogAutomation:
         print(f"Task {task_name} failed. Final status: {execution.status}")
         return None
 
-    async def run_pipeline(self, search_query: str):
-        """Multi-stage pipeline execution"""
-        # Initialize agent once
-        self.client.agents.create_or_update(
-            agent_id=self.agent_id,
-            name="Blog Generation Agent",
-            about="Advanced blog generator using Brave Search and multi-step processing",
-            model="gpt-4o",
-        )
-        
-        # Load all task definitions
-        self.task_definitions = self.load_task_definitions()
+    async def processing_pipeline(self, search_query: str):
 
-        # Modified Brave search call
-        search_results = await self.run_task(
-            "brave_search_task",
-            {"topic": search_query}  # Changed from list to dict
-        )
-        
-        if not search_results:
-            print("Brave search failed")
-            return
-        
-        # Use get to safely access nested keys
-        results = search_results.get('search_results', {}).get('results', None)
+        """processing pipeline execution"""
 
-        if not results:
-            print("No results found in search response")
-            return
+        # Call Jina AI API to generate blog content
+        jina_response = await self.call_jina_api(search_query)
 
-        print(f"Search results: {results}")
-
-        blog_post = await self.run_task(
-            "blog_prompt_engineering_task",
-            {
-                "search_results": results,
-                "topic": search_query
-            }
-        )
-
-        if blog_post:
-            output_path = self.base_dir / "generated_blog.md"
-            # Directly access the evaluated content
-            content = blog_post.get("content", "")
-            output_path.write_text(content)
-            print(f"Blog generated successfully at {output_path}")
+        # Write Jina response to file
+        if jina_response:
+            try:
+                choices = jina_response.get("choices", [])
+                if choices:
+                    content = choices[0].get("message", {}).get("content", "")
+                    if content:
+                        output_path = self.base_dir / "generated_blog.md"
+                        output_path.write_text(content)
+                        print(f"Blog generated successfully at {output_path}")
+                    else:
+                        print("Content is empty in the Jina response.")
+                else:
+                    print("No choices found in the Jina response.")
+            except Exception as e:
+                logging.error(f"Error extracting content from Jina response: {str(e)}")
+        else:
+            print("Failed to generate blog using Jina AI API")
 
 async def main():
     automation = BlogAutomation()
     search_query = os.getenv("SEARCH_QUERY")
     if not search_query:
         search_query = input("Enter the search query: ")
-    await automation.run_pipeline(search_query)
+    await automation.processing_pipeline(search_query)
 
 if __name__ == "__main__":
     asyncio.run(main()) 

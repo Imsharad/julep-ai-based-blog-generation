@@ -38,3 +38,4 @@ generated_blog.md
 *.log
 .coverage
 htmlcov/
+response_file.yaml
