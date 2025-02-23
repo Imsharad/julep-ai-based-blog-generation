@@ -39,3 +39,5 @@ generated_blog.md
 .coverage
 htmlcov/
 response_file.yaml
+jina_response_debug.json
+jina_response.json

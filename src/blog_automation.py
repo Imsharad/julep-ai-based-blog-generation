@@ -10,7 +10,8 @@ import sys
 from pathlib import Path
 import uuid  # Add this import to generate valid UUIDs
 import logging
-import requests
+import json
+import base64
 
 class BlogAutomation:
     def __init__(self):
@@ -62,38 +63,11 @@ class BlogAutomation:
             print(f"Loading task: {yaml_file.stem}")
             with open(yaml_file, "r") as f:
                 content = f.read()
-                
-            # Replace template variables with actual values
-            content = content.replace("<ACTUAL_API_KEY>", self.brave_api_key)
-            
+
+            content = content.replace("<JINA_API_KEY>", self.jina_api_key)
+
             task_defs[yaml_file.stem] = yaml.safe_load(content)
         return task_defs
-
-    async def call_jina_api(self, search_query: str):
-        """Call Jina AI API to generate blog content"""
-        url = "https://deepsearch.jina.ai/v1/chat/completions"
-        headers = {
-            "Content-Type": "application/json",
-            "Authorization": f"Bearer {self.jina_api_key}"
-        }
-        payload = {
-            "model": "jina-deepsearch-v1",
-            "messages": [
-                {"role": "user", "content": "Hi!"},
-                {"role": "assistant", "content": "Hi, how can I help you?"},
-                {"role": "user", "content": f"You are a professional blog writer. Create a comprehensive post about {search_query}"}
-            ],
-            "stream": False, 
-            "reasoning_effort": "high"
-        }
-
-        try:
-            response = requests.post(url, headers=headers, json=payload)
-            response.raise_for_status()
-            return response.json()
-        except requests.exceptions.RequestException as e:
-            logging.error(f"Failed to call Jina AI API: {str(e)}")
-            return None
 
     async def run_task(self, task_name: str, inputs: dict):
         """Execute a specific task by name"""
@@ -104,6 +78,7 @@ class BlogAutomation:
         
         # Matches working example's fixed UUID
         task_id = "d4c3b2a1-4321-8765-1098-fedcba654321"
+
         
         # Create/update task with proper timeout
         try:
@@ -137,7 +112,7 @@ class BlogAutomation:
                 if retries >= max_retries:
                     raise RuntimeError(f"Timeout after {max_retries} retries. Final status: {current_status}")
                     
-                await asyncio.sleep(3)
+                await asyncio.sleep(15)
                 retries += 1
                 
             except Exception as e:
@@ -162,13 +137,31 @@ class BlogAutomation:
 
         """processing pipeline execution"""
 
-        # Call Jina AI API to generate blog content
-        jina_response = await self.call_jina_api(search_query)
+        # Initialize agent once
+        self.client.agents.create_or_update(
+            agent_id=self.agent_id,
+            name="Blog Generation Agent",
+            about="Advanced blog generator using Jina AI API",
+            model="gpt-4o",
+        )
 
-        # Write Jina response to file
+         # Load all task definitions
+        self.task_definitions = self.load_task_definitions()
+
+
+        jina_response = await self.run_task(
+            "jina_api_call_task",
+            {
+                "jina_api_key":self.jina_api_key,
+                "topic": search_query
+            }  # Changed from list to dict
+        )
+
         if jina_response:
             try:
-                choices = jina_response.get("choices", [])
+                # The response is already a dictionary, so we can directly access it
+                json_data = jina_response.get("json", {})
+                choices = json_data.get("choices", [])
                 if choices:
                     content = choices[0].get("message", {}).get("content", "")
                     if content:
@@ -183,6 +176,7 @@ class BlogAutomation:
                 logging.error(f"Error extracting content from Jina response: {str(e)}")
         else:
             print("Failed to generate blog using Jina AI API")
+
 
 async def main():
     automation = BlogAutomation()
