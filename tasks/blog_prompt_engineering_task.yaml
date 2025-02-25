@@ -8,35 +8,99 @@ input_schema:
       items:
         type: object
         properties:
-          url: {type: string}
+          link: {type: string}
           title: {type: string}
           snippet: {type: string}
     topic:
       type: string
+    image_results:
+      type: array
+      items:
+        type: object
+        properties:
+          title: {type: string}
+          imageUrl: {type: string}
+          imageWidth: {type: integer}
+          imageHeight: {type: integer}
+          thumbnailUrl: {type: string}
+          thumbnailWidth: {type: integer}
+          thumbnailHeight: {type: integer}
+          source: {type: string}
+          domain: {type: string}
+          link: {type: string}
+          googleUrl: {type: string}
+          position: {type: integer}
 
 main:
 - evaluate:
-    formatted_results: "$ [{'title': r.get('title'), 'snippet': r.get('snippet')} for r in _.search_results]"
+    formatted_results: "$ [{'title': r.get('title'), 'snippet': r.get('snippet'), 'link': r.get('link')} for r in _.search_results]"
+    formatted_results_images: "$ [{'title': r.get('title'), 'imageUrl': r.get('imageUrl'), 'link': r.get('link')} for r in _.image_results]"
 - prompt:
   - role: system
     content: |
-      $ f""" You are a professional blog writer. Create a comprehensive post about
-      '{steps[0].input.topic}' using these search results:
+      $ f""" You are a professional blog writer. Write a well-structured and engaging blog post on the topic: 
+      '{steps[0].input.topic}' use the following requirements and guidelines:
       """
   - role: user
     content: |
-      $ f""" {_.formatted_results}
-      
+      $ f""" 
       Requirements:
-      - Markdown formatting
-      - Section headings
-      - Source citations
+      -  Ensure the final output does not contain encoding artifacts or unrecognized characters.
+      - Use the provided Serper API results {_.formatted_results} to gather accurate and relevant information for the blog. Only use these links as your data sources.
+      - Include citations at the end of each section to reference the links used.
+      - Add 1 image in the blog just after the heading from the provided Serper API results {_.formatted_results_images}.
+        Place an image directly below the blog heading in Markdown format.
+      - Add frontmatter in the blogs with the following details:
+        a) Title: The title of the blog
+        b) Author: Your Name
+        c) Date: Today's Date
+        d) Image: The image you selected from the Serper API results
+        e) Article Category: Business/sports/technology/entertainment
+        f) Tags: 3-4 relevant tags (e.g., cryptocurrency, blockchain, finance)
+        Example : `Politics & News Editor: Wade Gallagher`, `Last updated on`
+      - Add quotes in the blog wherever required.
+
+
+      - Tone : 
+        a) Critical yet balanced: Present opposing viewpoints (e.g., supporters vs. critics, economic benefits vs. ethical risks).
+        b) Analytical: Prioritize data, expert quotes, and real-world examples over opinion.
+        c) Provocative: Use rhetorical questions and bold claims to engage readers (e.g., "How much longer can Corporate America afford to remain silent?").
+      - Language:
+        a) Formal but accessible: Avoid jargon; explain technical terms (e.g., blockchain, tariffs).
+        b) Narrative flow: Connect sections with transitional phrases (e.g., "What’s clear is...", "The emergence of... highlights a broader trend").
+      - Headlines :
+        a) Primary Headings (H2): Broad thematic focus (e.g., "Corporate America’s Silence: A Calculated Risk?").
+        b) Subheadings (H3): Drill into specifics (e.g., "The Economic Cost of Selective Advocacy", "Regulatory Scrutiny and Legal Risks").
+        c) Avoid generic headers: Use action-oriented phrases (e.g., "Musk’s Power Grab and the Erosion of Trust").
+      - Introduction:
+        a) Start with a provocative hook (e.g., "In the ever-evolving world of cryptocurrency, a new player has emerged...").
+        b) Frame the topic’s significance (e.g., "...a complex web of motivations, economic implications, and ethical concerns").
+      - Body Section:
+        a) Technical Details: Explain mechanisms briefly (e.g., "built on Ethereum’s blockchain") but prioritize implications.
+        b) Market/Public Reaction: Include quotes from stakeholders (e.g., investors, experts) using blockquotes.
+        c) Regulatory/Political Angle: Highlight investigations, lawsuits, or policy shifts (e.g., "The SEC has reportedly launched a preliminary inquiry...").
+      - Conclusion:
+        a) End with broader implications (e.g., "forced the financial and political worlds to grapple with a new reality").
+        b) Pose open-ended questions (e.g., "What’s clear is that... but at what cost?").
+      - Content Guidelines:
+        a) Use bold sparingly: Highlight key terms (e.g., "Trump Coin", "high-risk, high-reward").
+        b) Incorporate quotes: Attribute to experts/organizations (e.g., Dr. Elena Martinez, Columbia University).
+        c) Avoid lists: Use narrative paragraphs even for sequential points.
+
+      
+      Instructions:
+      - Write in Markdown format with clear section headings (## for main sections, ### for subsections).
+      - Add only a 1 image in the blog just after the heading.
+      - Do not use any special symbols.
       - 500-700 words
+      - Start with an engaging introduction that sets up the topic and its significance.
+      - Divide the content into 3-4 sections with clear headings. Each section should have an image followed by text content.
+      - No bullet points/numbered lists: Convert into prose (e.g., "Industry lobbying groups spend hundreds of millions annually... yet remain silent").
       """
   response_format:
     type: text
   settings:
-    model: claude-3.5-sonnet
-    temperature: 0.7
+    model: o3-mini
+
 - evaluate:
     content: $ _.choices[0].message.content #python expression

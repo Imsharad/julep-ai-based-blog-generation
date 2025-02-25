@@ -1,17 +1,14 @@
 import os
-import time
 import yaml
 from julep import Client
 from dotenv import load_dotenv
-import urllib.parse
 from pprint import pprint
 import asyncio
-import sys
 from pathlib import Path
 import uuid  # Add this import to generate valid UUIDs
 import logging
-import json
-import base64
+
+
 
 class BlogAutomation:
     def __init__(self):
@@ -36,7 +33,7 @@ class BlogAutomation:
         self.julep_api_key = os.getenv("JULEP_API_KEY")
         self.brave_api_key = os.getenv("BRAVE_API_KEY")
         self.agent_id = os.getenv("AGENT_UUID")  # Matches AGENT_UUID in .env
-        self.jina_api_key = os.getenv("JINA_API_KEY")
+        self.serper_api_key = os.getenv("SERPER_API_KEY")
         
         # Validate all required variables exist
         missing = []
@@ -64,9 +61,9 @@ class BlogAutomation:
             with open(yaml_file, "r") as f:
                 content = f.read()
 
-            content = content.replace("<JINA_API_KEY>", self.jina_api_key)
-
+            content = content.replace("<SERPER_API_KEY>", self.serper_api_key)
             task_defs[yaml_file.stem] = yaml.safe_load(content)
+
         return task_defs
 
     async def run_task(self, task_name: str, inputs: dict):
@@ -112,7 +109,7 @@ class BlogAutomation:
                 if retries >= max_retries:
                     raise RuntimeError(f"Timeout after {max_retries} retries. Final status: {current_status}")
                     
-                await asyncio.sleep(15)
+                await asyncio.sleep(2)
                 retries += 1
                 
             except Exception as e:
@@ -148,41 +145,76 @@ class BlogAutomation:
          # Load all task definitions
         self.task_definitions = self.load_task_definitions()
 
-
-        jina_response = await self.run_task(
-            "jina_api_call_task",
+        serper_response = await self.run_task(
+            "serper_search_api_call_task",
             {
-                "jina_api_key":self.jina_api_key,
-                "topic": search_query
-            }  # Changed from list to dict
+                "query": search_query
+            }
         )
 
-        if jina_response:
-            try:
-                # The response is already a dictionary, so we can directly access it
-                json_data = jina_response.get("json", {})
-                choices = json_data.get("choices", [])
-                if choices:
-                    content = choices[0].get("message", {}).get("content", "")
-                    if content:
-                        output_path = self.base_dir / "generated_blog.md"
-                        output_path.write_text(content)
-                        print(f"Blog generated successfully at {output_path}")
-                    else:
-                        print("Content is empty in the Jina response.")
-                else:
-                    print("No choices found in the Jina response.")
-            except Exception as e:
-                logging.error(f"Error extracting content from Jina response: {str(e)}")
+        if serper_response.get('json') and serper_response.get('json').get('organic'):
+            organic = serper_response.get('json').get('organic')
         else:
-            print("Failed to generate blog using Jina AI API")
+            print("Error: 'organic' key not found in serper_response or 'json' key not present.")
+            return "Error: 'organic' key not found in serper_response or 'json' key not present."
 
+        serper_response = await self.run_task(
+            "serper_image_api_call_task",
+            {
+                "query": search_query
+            }
+        )
+        
+        if serper_response.get('json') and serper_response.get('json').get('images'):
+            images = serper_response.get('json').get('images')
+        else:
+            print("Error: 'images' key not found in serper_response or 'json' key not present.")
+            return "Error: 'images' key not found in serper_response or 'json' key not present."
+
+        blog_post = await self.run_task(
+            "blog_prompt_engineering_task",
+            {
+                "search_results": organic,
+                "topic": search_query,
+                "image_results": images
+            }
+        )
+
+        if blog_post:
+            output_path = self.base_dir / "generated_blog.md"
+            # Directly access the evaluated content
+            content = blog_post.get("content", "")
+            # Normalize and remove unwanted characters
+            cleaned_content = content.encode("utf-8", "ignore").decode("utf-8")
+
+            output_path.write_text(cleaned_content, encoding="utf-8")
+            print(f"Blog generated successfully at {output_path}")
+
+
+# Function to create a search query for a topic with specified sources
+def create_search_query(topic, sources):
+    # Join the sources with ' OR site:' to format the query
+    sources_query = ' OR site:'.join(sources)
+    # Combine the topic with the formatted sources
+    search_query = f"{topic} site:{sources_query}"
+    return search_query
 
 async def main():
     automation = BlogAutomation()
     search_query = os.getenv("SEARCH_QUERY")
+    sources = [
+    "www.bbc.com", 
+    "www.nytimes.com", 
+    "www.reuters.com", 
+    "www.theguardian.com", 
+    "www.washingtonpost.com"
+    ]
+    
     if not search_query:
-        search_query = input("Enter the search query: ")
+        search_query = input("Enter search query: ")
+    
+    search_query = create_search_query(search_query, sources)
+
     await automation.processing_pipeline(search_query)
 
 if __name__ == "__main__":

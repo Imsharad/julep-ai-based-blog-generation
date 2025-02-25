@@ -1,0 +1,25 @@
+name: Serper API Call Task
+description: This task calls the Serper API to get images for a given query
+input_schema:
+  query:
+    type: string
+    description: Subject for the blog post
+    
+
+tools:
+  - type: api_call
+    name: serper_api_call
+    api_call:
+      method: POST
+      url: https://google.serper.dev/images
+      headers:
+        X-API-KEY: <SERPER_API_KEY>
+        Content-Type: application/json
+     
+
+main:
+  - tool: serper_api_call
+    arguments:
+      json:
+        "q": $ f"{_.query}"
+      
